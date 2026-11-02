@@ -1,0 +1,18 @@
+# Maven build output (recreated by every build)
+/target/
+
+# IntelliJ IDEA settings (personal to your machine)
+/.idea/
+*.iml
+
+# VS Code settings
+/.vscode/
+
+# Reports written by option 7
+/data/eod-report.txt
+
+# My own practice/test files (T27-T41 cases)
+/data/practice/
+
+# Files created by a VS Code extension, not part of the project
+/.github/modernize/

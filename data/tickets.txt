@@ -1,0 +1,11 @@
+# QueueDesk sample tickets - one ticket per line, fields separated by |
+# bug     | title | description | requester | PRIORITY | SEVERITY (MINOR/MAJOR/BLOCKER) | steps to reproduce
+# feature | title | description | requester | PRIORITY | votes (0 or more)              | business justification
+# access  | title | description | requester | PRIORITY | system name                    | access level
+# Optional 8th field: when the ticket was created, like 2026-10-30T09:00 (otherwise: the time it is loaded).
+# Lines starting with # and empty lines are ignored.
+
+bug|Login button fails|Clicking Login shows an error|Asha|CRITICAL|MAJOR|Open login page and submit valid credentials|2026-10-30T09:00
+feature|Export tickets|Download the ticket list as CSV|Mira|LOW|12|Save helpdesk reporting time
+access|Wiki access|Need read access to team documentation|Dev|HIGH|Team Wiki|READ
+bug|Typo on dashboard|Welcome text says Wellcome|Ravi|LOW|MINOR|Open the dashboard and read the heading
