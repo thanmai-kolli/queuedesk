@@ -100,5 +100,4 @@ If any line is wrong, nothing is loaded, and the message says which line to fix.
 ## Not included yet
 
 Tickets live in memory only; they are gone when the program exits.
-JSON storage, Streams, and JUnit tests are later topics in the month and will be
-added as later milestones.
+JSON storage, Streams, and JUnit tests need to be added
