@@ -7,6 +7,8 @@ import com.queuedesk.model.Ticket;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Milestone 4: a generic store for tickets, kept in memory.
@@ -48,6 +50,22 @@ public class Repository<T extends Ticket> {
             }
         }
         return result;
+    }
+
+    // Puts every ticket in a list under its assignee's name; unassigned tickets go under "Unassigned".
+    // The TreeMap keeps names sorted A-Z, ignoring upper/lower case (so "asha" and "Asha" share a group).
+    public Map<String, List<T>> groupByAssignee() {
+        Map<String, List<T>> groups = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (T item : items) {
+            String name = item.getAssignee() == null ? "Unassigned" : item.getAssignee();
+            List<T> group = groups.get(name);
+            if (group == null) {
+                group = new ArrayList<>();
+                groups.put(name, group);
+            }
+            group.add(item);
+        }
+        return groups;
     }
 
     public int size() {
