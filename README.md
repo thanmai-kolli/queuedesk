@@ -16,6 +16,7 @@ prints the result.
  6. Load tickets from a file
  7. Write end-of-day report
  8. Run queue number simulator
+ 9. View tickets grouped by assignee
  0. Exit
 --------------------------------
 ```
@@ -27,7 +28,7 @@ prints the result.
 | 1 | Queue Number Simulator: Scanner, loop, modulo, running totals | `QueueNumberSimulator` |
 | 2 | Ticket base class: constructors, fields, `ageInHours()`, static counters | `model/Ticket`, `Priority`, `Status` |
 | 3 | Subclasses and capabilities | `model/BugTicket`, `FeatureRequestTicket`, `AccessRequestTicket`, `Escalatable`, `Severity` |
-| 4 | Repository and triage queue: `PriorityQueue`, `Comparable`, comparators, generic `Repository<T>` | `repository/Repository`, `service/TriageService`, `service/TicketComparators` |
+| 4 | Repository and triage queue: two `PriorityQueue`s (natural order and a comparator), `Comparable`, comparators, generic `Repository<T>` with `groupByAssignee()`, generic `oldest()` method | `repository/Repository`, `service/TriageService`, `service/TicketComparators` |
 | 5 | File loading, custom checked/unchecked exceptions, end-of-day report | `service/TicketFileLoader`, `service/ReportGenerator`, `exception/*` |
 
 ## Project structure
@@ -93,6 +94,7 @@ If any line is wrong, nothing is loaded, and the message says which line to fix.
 
 - Effort estimate: bug 2 / 4 / 8 hours (MINOR / MAJOR / BLOCKER), feature 8 hours, access 1 hour.
 - Triage order: higher priority first, then the older ticket first.
+- Options 4 and 5 can also use a second queue: by assignee (A-Z, unassigned last), then highest priority.
 - Escalating a bug or access ticket raises its escalation level and its priority by one step.
 - Overdue: CRITICAL, still OPEN or IN_PROGRESS, created more than 24 hours ago.
 - Simulator: ticket numbers divisible by 5 go to the VIP lane; numbers divisible by 10 also get a priority recheck.

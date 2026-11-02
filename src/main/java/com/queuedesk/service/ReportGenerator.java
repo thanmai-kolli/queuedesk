@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -59,17 +60,18 @@ public class ReportGenerator {
         }
         report.append(String.format("\nTotal estimated effort: %.1f hours\n", totalEffort));
 
-        Ticket oldestOpen = null;
+        // The generic method TriageService.oldest finds the oldest of the OPEN tickets.
+        List<Ticket> openTickets = new ArrayList<>();
         for (Ticket ticket : tickets) {
-            if (ticket.getStatus() == Status.OPEN
-                    && (oldestOpen == null || ticket.getCreatedAt().isBefore(oldestOpen.getCreatedAt()))) {
-                oldestOpen = ticket;
+            if (ticket.getStatus() == Status.OPEN) {
+                openTickets.add(ticket);
             }
         }
         report.append("Oldest open ticket: ");
-        if (oldestOpen == null) {
+        if (openTickets.isEmpty()) {
             report.append("none\n");
         } else {
+            Ticket oldestOpen = TriageService.oldest(openTickets);
             report.append(oldestOpen).append(" - ").append(oldestOpen.ageInHours()).append(" hours old\n");
         }
 

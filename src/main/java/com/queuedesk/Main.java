@@ -23,6 +23,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
@@ -62,7 +63,7 @@ public class Main {
         try {
             while (running) {
                 printMenu();
-                int choice = input.readInt("Choose an option (0-8): ", 0, 8);
+                int choice = input.readInt("Choose an option (0-9): ", 0, 9);
                 System.out.println();
                 try {
                     switch (choice) {
@@ -74,6 +75,7 @@ public class Main {
                         case 6 -> loadTicketsFromFile();
                         case 7 -> writeEndOfDayReport();
                         case 8 -> QueueNumberSimulator.run(scanner);
+                        case 9 -> viewByAssignee();
                         case 0 -> running = false;
                         default -> System.out.println("Unknown option.");
                     }
@@ -102,6 +104,7 @@ public class Main {
         System.out.println(" 6. Load tickets from a file");
         System.out.println(" 7. Write end-of-day report");
         System.out.println(" 8. Run queue number simulator");
+        System.out.println(" 9. View tickets grouped by assignee");
         System.out.println(" 0. Exit");
         System.out.println("--------------------------------");
     }
@@ -213,22 +216,27 @@ public class Main {
 
     // ---------- 4. Show triage queue ----------
     private void showTriageQueue() {
-        List<Ticket> waiting = triageService.getWaitingInOrder(repository.findAll());
+        boolean byAssignee = chooseQueueOrder();
+        List<Ticket> waiting = triageService.getWaitingInOrder(repository.findAll(), byAssignee);
         if (waiting.isEmpty()) {
             System.out.println("No OPEN tickets are waiting.");
             return;
         }
-        System.out.println("Triage queue - " + waiting.size() + " OPEN tickets, most urgent first:");
+        System.out.println("Triage queue - " + waiting.size() + " OPEN tickets, "
+                + (byAssignee ? "by assignee, then most urgent:" : "most urgent first:"));
         int position = 1;
         for (Ticket ticket : waiting) {
-            System.out.println("  " + position + ". " + ticket + " - waiting " + ticket.ageInHours() + "h");
+            String assignee = ticket.getAssignee() == null ? "unassigned" : ticket.getAssignee();
+            System.out.println("  " + position + ". " + ticket + " - " + assignee
+                    + ", waiting " + ticket.ageInHours() + "h");
             position++;
         }
     }
 
     // ---------- 5. Serve next ticket ----------
     private void serveNextTicket() {
-        Ticket next = triageService.serveNext(repository.findAll());
+        boolean byAssignee = chooseQueueOrder();
+        Ticket next = triageService.serveNext(repository.findAll(), byAssignee);
         if (next == null) {
             System.out.println("No OPEN tickets are waiting. Nothing to serve.");
             return;
@@ -289,5 +297,30 @@ public class Main {
         } catch (IOException e) {
             System.out.println("Could not save the report: " + e.getMessage());
         }
+    }
+
+    // ---------- 9. View tickets grouped by assignee ----------
+    private void viewByAssignee() {
+        if (repository.isEmpty()) {
+            System.out.println("No tickets yet. Create one (option 1) or load a file (option 6).");
+            return;
+        }
+        Map<String, List<Ticket>> groups = repository.groupByAssignee();
+        for (Map.Entry<String, List<Ticket>> entry : groups.entrySet()) {
+            List<Ticket> tickets = entry.getValue();
+            Ticket oldest = TriageService.oldest(tickets);   // the generic method
+            System.out.println(entry.getKey() + " - " + tickets.size() + " ticket(s), oldest is #" + oldest.getId() + ":");
+            for (Ticket ticket : tickets) {
+                System.out.println("    " + ticket);
+            }
+        }
+    }
+
+    // Used by options 4 and 5: which of the two priority queues to use.
+    private boolean chooseQueueOrder() {
+        System.out.println("Queue order:");
+        System.out.println("  1. Most urgent first (natural order: priority, then oldest)");
+        System.out.println("  2. By assignee, then most urgent (TicketComparators)");
+        return input.readInt("Choose 1-2: ", 1, 2) == 2;
     }
 }
