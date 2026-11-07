@@ -6,8 +6,13 @@ package com.queuedesk.model;
  */
 public class FeatureRequestTicket extends Ticket {
 
-    private final int votes;
-    private final String businessJustification;
+    private int votes;
+    private String businessJustification;
+
+    // Only for Jackson when loading tickets.json (see the note in Ticket).
+    private FeatureRequestTicket() {
+        super();
+    }
 
     public FeatureRequestTicket(String title, String description, String requester, Priority priority,
                                 int votes, String businessJustification) {
@@ -38,6 +43,17 @@ public class FeatureRequestTicket extends Ticket {
     @Override
     public String getType() {
         return "Feature request";
+    }
+
+    @Override
+    public void validate() {
+        super.validate();
+        if (votes < 0) {
+            throw new IllegalArgumentException("votes cannot be negative");
+        }
+        if (isBlank(businessJustification)) {
+            throw new IllegalArgumentException("businessJustification is missing");
+        }
     }
 
     @Override

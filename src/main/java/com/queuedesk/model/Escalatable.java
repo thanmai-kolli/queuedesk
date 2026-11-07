@@ -10,10 +10,12 @@ public interface Escalatable {
 
     void escalate();
 
-    int getEscalationLevel();
+    boolean isEscalated();
+
+    int escalationLevel();
 
     // A default method has a body, so classes that implement the interface get it for free.
-    default boolean isEscalated() {
-        return getEscalationLevel() > 0;
+    default String escalationBadge() {
+        return isEscalated() ? "ESCALATED (level " + escalationLevel() + ")" : "not escalated";
     }
 }

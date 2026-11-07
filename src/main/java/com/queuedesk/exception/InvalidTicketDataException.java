@@ -16,6 +16,12 @@ public class InvalidTicketDataException extends Exception {
         this.lineNumber = lineNumber;
     }
 
+    // For problems that have no line number, such as a broken tickets.json.
+    public InvalidTicketDataException(String message, Throwable cause) {
+        this(message, 0, cause);
+    }
+
+    // 0 means "no line number" (the problem was not in a text file line).
     public int getLineNumber() {
         return lineNumber;
     }

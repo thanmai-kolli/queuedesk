@@ -14,7 +14,23 @@
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <exec.mainClass>com.queuedesk.Main</exec.mainClass>
+    <jackson.version>2.18.3</jackson.version>
   </properties>
+
+  <dependencies>
+    <!-- Milestone 7: Jackson turns ticket objects into JSON and back. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+    <!-- Teaches Jackson how to read and write LocalDateTime (createdAt). -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+  </dependencies>
 
   <build>
     <plugins>
@@ -30,19 +46,6 @@
         <version>3.5.0</version>
         <configuration>
           <mainClass>${exec.mainClass}</mainClass>
-        </configuration>
-      </plugin>
-      <!-- Writes the main class into the jar, so "java -jar target/queuedesk-1.0-SNAPSHOT.jar" works. -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-jar-plugin</artifactId>
-        <version>3.4.2</version>
-        <configuration>
-          <archive>
-            <manifest>
-              <mainClass>com.queuedesk.Main</mainClass>
-            </manifest>
-          </archive>
         </configuration>
       </plugin>
     </plugins>

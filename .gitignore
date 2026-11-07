@@ -11,7 +11,11 @@
 # Reports written by option 7
 /data/eod-report.txt
 
-# My own practice/test files (T27-T41 cases)
+# Saved tickets (created on the first run from data/tickets.txt) and its temporary file
+/data/tickets.json
+/data/tickets.json.tmp
+
+# My own practice/test files
 /data/practice/
 
 # Files created by a VS Code extension, not part of the project

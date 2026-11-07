@@ -12,20 +12,19 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 /**
  * Milestone 5: reads tickets from a text file, one ticket per line.
+ * Milestone 7: since tickets are now saved as JSON, this loader is only used once,
+ * to move the old tickets.txt into tickets.json (and to import extra text files).
  *
- * Line format (fields separated by |):
+ * Line format (exactly 7 fields separated by |):
  *   bug|title|description|requester|PRIORITY|SEVERITY|steps to reproduce
  *   feature|title|description|requester|PRIORITY|votes|business justification
  *   access|title|description|requester|PRIORITY|system name|access level
- * An optional 8th field is the creation time, for example 2026-10-30T09:00.
  * Empty lines and lines starting with # are skipped.
  *
  * If ANY line is wrong, nothing is returned: the caller gets an exception
@@ -60,13 +59,11 @@ public class TicketFileLoader {
     private Ticket parseLine(String line) {
         // -1 keeps empty fields at the end, so "a|b|" gives 3 fields, not 2.
         String[] fields = line.split("\\|", -1);
-        if (fields.length != 7 && fields.length != 8) {
-            throw new IllegalArgumentException("expected 7 or 8 fields separated by |, but found " + fields.length);
+        if (fields.length != 7) {
+            throw new IllegalArgumentException("expected 7 fields separated by |, but found " + fields.length);
         }
         for (int i = 0; i < fields.length; i++) {
             fields[i] = fields[i].trim();
-        }
-        for (int i = 0; i < 7; i++) {
             if (fields[i].isEmpty()) {
                 throw new IllegalArgumentException("field " + (i + 1) + " is empty");
             }
@@ -78,7 +75,7 @@ public class TicketFileLoader {
         String requester = fields[3];
         Priority priority = parseEnum(Priority.class, fields[4], "priority");
 
-        Ticket ticket = switch (type) {
+        return switch (type) {
             case "bug" -> new BugTicket(title, description, requester, priority,
                     parseEnum(Severity.class, fields[5], "severity"), fields[6]);
             case "feature" -> new FeatureRequestTicket(title, description, requester, priority,
@@ -88,11 +85,6 @@ public class TicketFileLoader {
             default -> throw new IllegalArgumentException(
                     "unknown ticket type '" + fields[0] + "' (use bug, feature or access)");
         };
-
-        if (fields.length == 8 && !fields[7].isEmpty()) {
-            ticket.setCreatedAt(parseDateTime(fields[7]));
-        }
-        return ticket;
     }
 
     // A generic method: works for any enum type (Priority, Severity, ...).
@@ -116,13 +108,5 @@ public class TicketFileLoader {
             throw new IllegalArgumentException("votes cannot be negative, but found " + votes);
         }
         return votes;
-    }
-
-    private LocalDateTime parseDateTime(String text) {
-        try {
-            return LocalDateTime.parse(text);
-        } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("created time must look like 2026-10-30T09:00, but found '" + text + "'");
-        }
     }
 }

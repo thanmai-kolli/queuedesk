@@ -11,11 +11,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Milestone 5: builds the end-of-day (EOD) summary and saves it to a file.
+ * Milestone 6: the total effort and the oldest open ticket now come from TicketAnalytics.
  */
 public class ReportGenerator {
 
@@ -54,33 +54,22 @@ public class ReportGenerator {
         }
 
         // Each subclass answers estimateEffortHours() in its own way (polymorphism).
-        double totalEffort = 0;
-        for (Ticket ticket : tickets) {
-            totalEffort += ticket.estimateEffortHours();
-        }
-        report.append(String.format("\nTotal estimated effort: %.1f hours\n", totalEffort));
+        report.append(String.format("\nTotal estimated effort: %.1f hours\n",
+                TicketAnalytics.totalEffortHours(tickets)));
 
-        // The generic method TriageService.oldest finds the oldest of the OPEN tickets.
-        List<Ticket> openTickets = new ArrayList<>();
-        for (Ticket ticket : tickets) {
-            if (ticket.getStatus() == Status.OPEN) {
-                openTickets.add(ticket);
-            }
-        }
-        report.append("Oldest open ticket: ");
-        if (openTickets.isEmpty()) {
-            report.append("none\n");
-        } else {
-            Ticket oldestOpen = TriageService.oldest(openTickets);
-            report.append(oldestOpen).append(" - ").append(oldestOpen.ageInHours()).append(" hours old\n");
-        }
+        // oldestOpenTicket returns an Optional: map turns a ticket into text, orElse covers "no OPEN tickets".
+        report.append("Oldest open ticket: ")
+                .append(TicketAnalytics.oldestOpenTicket(tickets)
+                        .map(t -> t + " - " + t.ageInHours() + " hours old")
+                        .orElse("none"))
+                .append("\n");
 
         report.append("\nEscalated tickets:\n");
         int escalatedCount = 0;
         for (Ticket ticket : tickets) {
             if (ticket instanceof Escalatable escalatable && escalatable.isEscalated()) {
                 report.append("  ").append(ticket).append(" - level ")
-                        .append(escalatable.getEscalationLevel()).append("\n");
+                        .append(escalatable.escalationLevel()).append("\n");
                 escalatedCount++;
             }
         }

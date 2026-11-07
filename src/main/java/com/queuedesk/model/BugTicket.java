@@ -6,9 +6,14 @@ package com.queuedesk.model;
  */
 public class BugTicket extends Ticket implements Escalatable {
 
-    private final Severity severity;
-    private final String stepsToReproduce;
+    private Severity severity;
+    private String stepsToReproduce;
     private int escalationLevel = 0;
+
+    // Only for Jackson when loading tickets.json (see the note in Ticket).
+    private BugTicket() {
+        super();
+    }
 
     public BugTicket(String title, String description, String requester, Priority priority,
                      Severity severity, String stepsToReproduce) {
@@ -57,8 +62,27 @@ public class BugTicket extends Ticket implements Escalatable {
     }
 
     @Override
-    public int getEscalationLevel() {
+    public boolean isEscalated() {
+        return escalationLevel > 0;
+    }
+
+    @Override
+    public int escalationLevel() {
         return escalationLevel;
+    }
+
+    @Override
+    public void validate() {
+        super.validate();
+        if (severity == null) {
+            throw new IllegalArgumentException("severity is missing");
+        }
+        if (isBlank(stepsToReproduce)) {
+            throw new IllegalArgumentException("stepsToReproduce is missing");
+        }
+        if (escalationLevel < 0) {
+            throw new IllegalArgumentException("escalationLevel cannot be negative");
+        }
     }
 
     @Override
@@ -66,6 +90,6 @@ public class BugTicket extends Ticket implements Escalatable {
         return super.getDetails()
                 + formatLine("Severity", severity)
                 + formatLine("Steps to reproduce", stepsToReproduce)
-                + formatLine("Escalation", escalationLevel == 0 ? "Not escalated" : "Level " + escalationLevel);
+                + formatLine("Escalation", escalationBadge());
     }
 }
