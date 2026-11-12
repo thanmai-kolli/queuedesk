@@ -4,26 +4,30 @@ import com.queuedesk.model.Escalatable;
 import com.queuedesk.model.Priority;
 import com.queuedesk.model.Status;
 import com.queuedesk.model.Ticket;
+import org.springframework.stereotype.Component;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * Milestone 5: builds the end-of-day (EOD) summary and saves it to a file.
- * Milestone 6: the total effort and the oldest open ticket now come from TicketAnalytics.
+ * Milestone 5: builds the end-of-day (EOD) summary.
+ * Milestone 6: the total effort and the oldest open ticket come from TicketAnalytics.
+ *
+ * "now" is passed in (from the Clock bean) instead of calling LocalDateTime.now() here,
+ * so a test can pretend it is two days later and check the overdue section.
  */
+@Component
 public class ReportGenerator {
 
     private static final DateTimeFormatter FORMAT = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm");
 
-    public String generate(List<Ticket> tickets) {
-        LocalDateTime now = LocalDateTime.now();
-
+    public String generate(List<Ticket> tickets, LocalDateTime now) {
         // StringBuilder adds text to one buffer instead of creating a new String each time.
         StringBuilder report = new StringBuilder();
         report.append("========== QueueDesk End-of-Day Report ==========\n");
@@ -60,7 +64,7 @@ public class ReportGenerator {
         // oldestOpenTicket returns an Optional: map turns a ticket into text, orElse covers "no OPEN tickets".
         report.append("Oldest open ticket: ")
                 .append(TicketAnalytics.oldestOpenTicket(tickets)
-                        .map(t -> t + " - " + t.ageInHours() + " hours old")
+                        .map(t -> t + " - " + t.ageInHours(now) + " hours old")
                         .orElse("none"))
                 .append("\n");
 
@@ -81,7 +85,7 @@ public class ReportGenerator {
         int overdueCount = 0;
         for (Ticket ticket : tickets) {
             if (isOverdue(ticket, now)) {
-                report.append("  ").append(ticket).append(" - ").append(ticket.ageInHours()).append(" hours old\n");
+                report.append("  ").append(ticket).append(" - ").append(ticket.ageInHours(now)).append(" hours old\n");
                 overdueCount++;
             }
         }
@@ -100,11 +104,15 @@ public class ReportGenerator {
         return critical && stillActive && olderThanOneDay;
     }
 
+    /**
+     * Writes the report to a NEW file. CREATE_NEW refuses to overwrite an existing file, so two
+     * requests at the same moment can never write into the same file.
+     */
     public void writeToFile(String report, Path file) throws IOException {
         if (file.getParent() != null) {
             Files.createDirectories(file.getParent());
         }
-        try (BufferedWriter writer = Files.newBufferedWriter(file)) {
+        try (BufferedWriter writer = Files.newBufferedWriter(file, StandardOpenOption.CREATE_NEW)) {
             writer.write(report);
         }
     }

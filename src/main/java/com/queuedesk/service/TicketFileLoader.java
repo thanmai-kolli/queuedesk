@@ -7,6 +7,7 @@ import com.queuedesk.model.FeatureRequestTicket;
 import com.queuedesk.model.Priority;
 import com.queuedesk.model.Severity;
 import com.queuedesk.model.Ticket;
+import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -18,8 +19,7 @@ import java.util.List;
 
 /**
  * Milestone 5: reads tickets from a text file, one ticket per line.
- * Milestone 7: since tickets are now saved as JSON, this loader is only used once,
- * to move the old tickets.txt into tickets.json (and to import extra text files).
+ * Used to import an uploaded file (POST /api/tickets/import) and the sample tickets at start-up.
  *
  * Line format (exactly 7 fields separated by |):
  *   bug|title|description|requester|PRIORITY|SEVERITY|steps to reproduce
@@ -29,28 +29,35 @@ import java.util.List;
  *
  * If ANY line is wrong, nothing is returned: the caller gets an exception
  * that says which line is wrong.
+ *
+ * @Component: Spring creates one TicketFileLoader and gives it to any class that needs it.
+ * It keeps no data between calls, so many requests can use it at the same time safely.
  */
+@Component
 public class TicketFileLoader {
 
     public List<Ticket> load(Path file) throws IOException, InvalidTicketDataException {
-        List<Ticket> tickets = new ArrayList<>();
-
         // try-with-resources: the reader is closed automatically, even if an exception happens.
         try (BufferedReader reader = Files.newBufferedReader(file)) {
-            String line;
-            int lineNumber = 0;
-            while ((line = reader.readLine()) != null) {
-                lineNumber++;
-                if (line.isBlank() || line.trim().startsWith("#")) {
-                    continue;
-                }
-                try {
-                    tickets.add(parseLine(line));
-                } catch (IllegalArgumentException e) {
-                    // Turn a low-level problem into our own exception, adding the line number.
-                    throw new InvalidTicketDataException(
-                            "Line " + lineNumber + ": " + e.getMessage(), lineNumber, e);
-                }
+            return load(reader);
+        }
+    }
+
+    // The caller opens and closes the reader (a file on disk, or an uploaded file).
+    public List<Ticket> load(BufferedReader reader) throws IOException, InvalidTicketDataException {
+        List<Ticket> tickets = new ArrayList<>();
+        String line;
+        int lineNumber = 0;
+        while ((line = reader.readLine()) != null) {
+            lineNumber++;
+            if (line.isBlank() || line.trim().startsWith("#")) {
+                continue;
+            }
+            try {
+                tickets.add(parseLine(line));
+            } catch (IllegalArgumentException e) {
+                // Turn a low-level problem into our own exception, adding the line number.
+                throw new InvalidTicketDataException("Line " + lineNumber + ": " + e.getMessage(), lineNumber, e);
             }
         }
         return tickets;

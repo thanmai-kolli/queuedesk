@@ -1,0 +1,39 @@
+# QueueDesk configuration.
+# ${NAME:default} means: use the environment variable NAME, or the default if it isn't set.
+# Never write your real password in this file: it is committed to Git.
+
+spring:
+  application:
+    name: queuedesk
+
+  datasource:
+    # createDatabaseIfNotExist=true makes the "queuedesk" database the first time the app starts.
+    url: ${QUEUEDESK_DB_URL:jdbc:mysql://localhost:3306/queuedesk?createDatabaseIfNotExist=true}
+    username: ${QUEUEDESK_DB_USERNAME:root}
+    password: ${QUEUEDESK_DB_PASSWORD:}
+
+  jpa:
+    hibernate:
+      # update = create tables that don't exist yet and add new columns; never deletes data.
+      # Fine for learning. Real projects use migration scripts (Flyway or Liquibase) instead.
+      ddl-auto: update
+    # Print every SQL statement Hibernate runs, so you can see what JPA does for you.
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    # Database work only happens inside service methods, never while JSON is being written.
+    open-in-view: false
+
+server:
+  port: 8080
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+queuedesk:
+  # When the tickets table is empty at start-up, these sample tickets are imported once.
+  # Leave it empty to start with no tickets.
+  seed-file: data/tickets.txt

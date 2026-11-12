@@ -1,60 +1,100 @@
 package com.queuedesk.model;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.DiscriminatorColumn;
+import jakarta.persistence.DiscriminatorType;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Inheritance;
+import jakarta.persistence.InheritanceType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * Milestone 2: the base class for every ticket.
+ * The base class for every ticket, stored in the MySQL table "tickets".
  *
- * It is abstract because a "plain" ticket does not exist in QueueDesk:
- * every real ticket is a BugTicket, FeatureRequestTicket or AccessRequestTicket.
+ * Milestone 2: fields, two constructors, getters, a few setters, ageInHours().
+ * Month 2 (JPA): the annotations tell Hibernate how this class maps to a table.
  *
- * Milestone 7 (JSON): the annotations below tell Jackson how to save and load tickets.
- *  - @JsonTypeInfo / @JsonSubTypes write a "type" property ("bug", "feature" or "access"),
- *    so loading creates the real subclass instead of failing on the abstract Ticket.
- *  - @JsonAutoDetect makes Jackson read and write the fields directly, not the getters,
- *    so getDetails(), getType() and the other getters are not saved as extra properties.
+ *  @Entity            this class is stored in the database
+ *  @Inheritance       all three ticket types share ONE table (SINGLE_TABLE)
+ *  @DiscriminatorColumn  the column "ticket_type" says which subclass a row is (BUG, FEATURE, ACCESS)
+ *  @UniqueConstraint  the database refuses two tickets with the same type, title and requester
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
-@JsonSubTypes({
-        @JsonSubTypes.Type(value = BugTicket.class, name = "bug"),
-        @JsonSubTypes.Type(value = FeatureRequestTicket.class, name = "feature"),
-        @JsonSubTypes.Type(value = AccessRequestTicket.class, name = "access")
-})
-@JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY,
-        getterVisibility = JsonAutoDetect.Visibility.NONE,
-        isGetterVisibility = JsonAutoDetect.Visibility.NONE,
-        setterVisibility = JsonAutoDetect.Visibility.NONE)
+@Entity
+@Table(name = "tickets",
+        uniqueConstraints = @UniqueConstraint(name = "uk_ticket_type_title_requester",
+                columnNames = {"ticket_type", "title", "requester"}))
+@Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+@DiscriminatorColumn(name = "ticket_type", discriminatorType = DiscriminatorType.STRING, length = 20)
 public abstract class Ticket implements Comparable<Ticket> {
 
-    // static = one shared copy for the whole class, not one per ticket.
-    private static int nextId = 1;
+    // MySQL creates the id (AUTO_INCREMENT), so two requests can never get the same id.
+    // This replaces Month 1's "private static int nextId".
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-    private static final DateTimeFormatter DISPLAY_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm");
-
-    // Instance fields = every ticket object has its own values.
-    // id, title and requester have no setters, so they never change after creation.
-    // They are not "final" only because Jackson must fill them in when loading tickets.json.
-    private int id;
+    @Column(nullable = false, length = 200)
     private String title;
-    private String description;
-    private String requester;
-    private Priority priority;
-    private Status status;
-    private LocalDateTime createdAt;
-    private String assignee;                    // null means "not assigned yet"
-    private Set<String> tags = new TreeSet<>(); // TreeSet: no duplicates, kept in A-Z order
 
-    // Only for Jackson. It creates an empty ticket, then fills every field from tickets.json.
-    // It does NOT take a new id: the ticket already has one saved in the file.
+    @Column(nullable = false, length = 2000)
+    private String description;
+
+    @Column(nullable = false, length = 100)
+    private String requester;
+
+    // EnumType.STRING stores "HIGH", not a number, so the table is readable.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Priority priority;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Status status;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @Column(length = 100)
+    private String assignee;   // null means "not assigned yet"
+
+    // Tags live in a second table, ticket_tags (ticket_id, tag).
+    // EAGER: tags are loaded together with the ticket, so they can be read after the
+    // database transaction has finished.
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "ticket_tags", joinColumns = @JoinColumn(name = "ticket_id"))
+    @Column(name = "tag", nullable = false, length = 50)
+    private Set<String> tags = new HashSet<>();
+
+    /**
+     * Optimistic locking. Hibernate adds 1 every time the row is saved, and every UPDATE says
+     * "... WHERE id = ? AND version = ?". If someone else saved the ticket in the meantime, the
+     * version no longer matches, nothing is updated, and Hibernate throws an exception
+     * instead of silently overwriting their change.
+     */
+    @Version
+    private Long version;
+
+    // JPA needs a constructor without parameters. Hibernate uses it when it reads a row,
+    // then fills in the fields. protected: our own code uses the constructors below.
     protected Ticket() {
     }
 
@@ -68,10 +108,6 @@ public abstract class Ticket implements Comparable<Ticket> {
         if (priority == null) {
             throw new IllegalArgumentException("Priority is required");
         }
-
-        this.id = nextId;
-        nextId++;
-
         this.title = title.trim();
         this.description = description == null ? "" : description.trim();
         this.requester = requester.trim();
@@ -86,32 +122,26 @@ public abstract class Ticket implements Comparable<Ticket> {
         this(title, "", requester, Priority.MEDIUM);
     }
 
-    // Every subclass must say how many hours it needs and what type it is.
+    // Every subclass says how many hours it needs, what type it is, and its own extra fields.
     public abstract double estimateEffortHours();
+
+    public abstract TicketType getTicketType();
 
     public abstract String getType();
 
+    public abstract Map<String, Object> typeDetails();
+
+    public long ageInHours(LocalDateTime now) {
+        return Duration.between(createdAt, now).toHours();
+    }
+
     public long ageInHours() {
-        return Duration.between(createdAt, LocalDateTime.now()).toHours();
-    }
-
-    // How many tickets have ever been made. IDs start at 1 and go up by one,
-    // so the next id minus one is the number already handed out.
-    public static int totalCreated() {
-        return nextId - 1;
-    }
-
-    // After loading tickets.json, new tickets must continue after the highest saved id,
-    // otherwise the next new ticket would get id 1 again and clash with a loaded one.
-    public static void continueIdsAfter(int highestUsedId) {
-        if (highestUsedId >= nextId) {
-            nextId = highestUsedId + 1;
-        }
+        return ageInHours(LocalDateTime.now());
     }
 
     // ----- getters -----
 
-    public int getId() {
+    public Long getId() {
         return id;
     }
 
@@ -143,9 +173,13 @@ public abstract class Ticket implements Comparable<Ticket> {
         return assignee;
     }
 
-    // Returns a read-only view, so other classes cannot add tags without addTag().
+    public Long getVersion() {
+        return version;
+    }
+
+    // A sorted, read-only copy: other classes must use addTag() to change tags.
     public Set<String> getTags() {
-        return Collections.unmodifiableSet(tags);
+        return Collections.unmodifiableSet(new TreeSet<>(tags));
     }
 
     // ----- setters: only description, priority and status (Milestone 2) -----
@@ -182,41 +216,6 @@ public abstract class Ticket implements Comparable<Ticket> {
         tags.add(tag.trim().toLowerCase());
     }
 
-    /**
-     * Checks a ticket that was loaded from tickets.json.
-     * Loading does not run the normal constructor, so its checks have to be repeated here.
-     * Subclasses override this, call super.validate(), and check their own fields.
-     */
-    public void validate() {
-        if (id < 1) {
-            throw new IllegalArgumentException("id must be 1 or more");
-        }
-        if (isBlank(title)) {
-            throw new IllegalArgumentException("title is missing");
-        }
-        if (isBlank(requester)) {
-            throw new IllegalArgumentException("requester is missing");
-        }
-        if (priority == null || status == null || createdAt == null) {
-            throw new IllegalArgumentException("priority, status and createdAt are required");
-        }
-        if (createdAt.isAfter(LocalDateTime.now())) {
-            throw new IllegalArgumentException("createdAt cannot be in the future");
-        }
-        if (description == null) {
-            description = "";
-        }
-        if (isBlank(assignee)) {
-            assignee = null;
-        }
-        // Jackson loads the tags into a plain HashSet; put them back into a sorted TreeSet.
-        Set<String> loadedTags = tags == null ? Set.of() : tags;
-        tags = new TreeSet<>();
-        for (String tag : loadedTags) {
-            addTag(tag);
-        }
-    }
-
     // Moves priority up one level: LOW -> MEDIUM -> HIGH -> CRITICAL. CRITICAL stays CRITICAL.
     protected void raisePriority() {
         if (priority != Priority.CRITICAL) {
@@ -226,7 +225,7 @@ public abstract class Ticket implements Comparable<Ticket> {
 
     /**
      * Natural order used by the triage PriorityQueue:
-     * higher priority first; if the priority is the same, the older ticket first.
+     * higher priority first; if the priority is the same, the older ticket first; then the lower id.
      * Returns a negative number if this ticket should come first.
      */
     @Override
@@ -240,31 +239,15 @@ public abstract class Ticket implements Comparable<Ticket> {
         if (byAge != 0) {
             return byAge;
         }
-        return Integer.compare(this.id, other.id);
+        if (this.id == null || other.id == null) {
+            return 0;   // not saved yet, so no id to compare
+        }
+        return Long.compare(this.id, other.id);
     }
 
     @Override
     public String toString() {
         return "#" + id + " [" + priority + "] " + title + " (" + status + ")";
-    }
-
-    // All the details of the ticket, one per line. Subclasses add their own lines.
-    public String getDetails() {
-        return "Ticket #" + id + " - " + getType() + "\n"
-                + formatLine("Title", title)
-                + formatLine("Description", description.isEmpty() ? "(none)" : description)
-                + formatLine("Requester", requester)
-                + formatLine("Priority", priority)
-                + formatLine("Status", status)
-                + formatLine("Assigned to", assignee == null ? "Unassigned" : assignee)
-                + formatLine("Tags", tags.isEmpty() ? "(none)" : String.join(", ", tags))
-                + formatLine("Created at", createdAt.format(DISPLAY_FORMAT))
-                + formatLine("Age", ageInHours() + " hours")
-                + formatLine("Estimated effort", estimateEffortHours() + " hours");
-    }
-
-    protected static String formatLine(String label, Object value) {
-        return String.format("  %-18s: %s\n", label, value);
     }
 
     protected static boolean isBlank(String text) {

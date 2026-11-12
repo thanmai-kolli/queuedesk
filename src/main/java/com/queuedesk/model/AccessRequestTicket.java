@@ -1,18 +1,33 @@
 package com.queuedesk.model;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.DiscriminatorValue;
+import jakarta.persistence.Entity;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * Milestone 3: a ticket asking for access to a system.
  * It IS a Ticket and it CAN be escalated.
+ * Stored in the "tickets" table with ticket_type = 'ACCESS'.
  */
+@Entity
+@DiscriminatorValue("ACCESS")
 public class AccessRequestTicket extends Ticket implements Escalatable {
 
+    @Column(name = "system_name", length = 100)
     private String systemName;
+
+    @Column(name = "access_level", length = 50)
     private String accessLevel;
+
+    // The same column is used by BugTicket.
+    @Column(name = "escalation_level")
     private int escalationLevel = 0;
 
-    // Only for Jackson when loading tickets.json (see the note in Ticket).
-    private AccessRequestTicket() {
-        super();
+    // For JPA only (see Ticket).
+    protected AccessRequestTicket() {
     }
 
     public AccessRequestTicket(String title, String description, String requester, Priority priority,
@@ -42,6 +57,11 @@ public class AccessRequestTicket extends Ticket implements Escalatable {
     }
 
     @Override
+    public TicketType getTicketType() {
+        return TicketType.ACCESS;
+    }
+
+    @Override
     public String getType() {
         return "Access request";
     }
@@ -63,24 +83,12 @@ public class AccessRequestTicket extends Ticket implements Escalatable {
     }
 
     @Override
-    public void validate() {
-        super.validate();
-        if (isBlank(systemName)) {
-            throw new IllegalArgumentException("systemName is missing");
-        }
-        if (isBlank(accessLevel)) {
-            throw new IllegalArgumentException("accessLevel is missing");
-        }
-        if (escalationLevel < 0) {
-            throw new IllegalArgumentException("escalationLevel cannot be negative");
-        }
-    }
-
-    @Override
-    public String getDetails() {
-        return super.getDetails()
-                + formatLine("System", systemName)
-                + formatLine("Access level", accessLevel)
-                + formatLine("Escalation", escalationBadge());
+    public Map<String, Object> typeDetails() {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("systemName", systemName);
+        details.put("accessLevel", accessLevel);
+        details.put("escalationLevel", escalationLevel);
+        details.put("escalation", escalationBadge());
+        return details;
     }
 }

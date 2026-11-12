@@ -3,7 +3,8 @@
 # feature | title | description | requester | PRIORITY | votes (0 or more)              | business justification
 # access  | title | description | requester | PRIORITY | system name                    | access level
 # Lines starting with # and empty lines are ignored.
-# QueueDesk reads this file only once, on its first run, and saves the tickets in data/tickets.json.
+# QueueDesk imports this file once, when the tickets table in MySQL is empty (see SampleDataLoader).
+# You can also upload a file in this format to POST /api/tickets/import.
 
 bug|Login button fails|Clicking Login shows an error|Asha|CRITICAL|MAJOR|Open login page and submit valid credentials
 feature|Export tickets|Download the ticket list as CSV|Mira|LOW|12|Save helpdesk reporting time

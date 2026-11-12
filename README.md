@@ -1,94 +1,129 @@
 # QueueDesk
 
-A console helpdesk ticketing system for a fictional IT helpdesk, built step by step while
-learning Java (Groww "Grow before you Groww", Month 1). Staff log bugs, feature requests and
+A helpdesk ticketing **REST API** for a fictional IT helpdesk, built while learning Java and
+Spring Boot (Groww "Grow before you Groww", Months 1 and 2). Staff log bugs, feature requests and
 access requests; QueueDesk triages them by priority and age, and someone works through the queue.
 
-The program talks with you: it shows a menu, asks for ticket details, and prints the result.
-Tickets are saved in `data/tickets.json` after every change, so they are still there next time.
+**Stack:** Java 17 · Spring Boot 3.5 · Spring Web · Spring Data JPA (Hibernate) · Bean Validation ·
+MySQL 8 · Swagger UI (springdoc) · JUnit 5, Mockito, AssertJ, MockMvc.
+
+The console version (Month 1) is kept under the Git tag `console-version`.
+
+## Architecture
 
 ```text
-------------- MENU -------------
- 1. Create a ticket
- 2. View triage board (all tickets)
- 3. Find a ticket by ID
- 4. Show triage queue
- 5. Serve next ticket
- 6. Import tickets from a text file
- 7. Write end-of-day report
- 8. Run queue number simulator
- 9. View tickets grouped by assignee
-10. Update a ticket (status, priority, assignee, tag, escalate)
-11. Ticket analytics
- 0. Exit
---------------------------------
+HTTP request (Swagger UI, Postman, curl)
+   │
+controller/   TicketController, TriageController, ReportController, SimulatorController
+   │            reads the request, @Valid checks the fields, returns JSON
+validation/   TicketValidator           business rules before anything is saved
+   │
+service/      TicketService, TriageService, ReportGenerator, TicketAnalytics, ...
+   │            business logic, @Transactional
+repository/   TicketRepository (Spring Data JPA)
+   │
+MySQL         tables tickets, ticket_tags
 ```
 
-## Milestones
+Cross-cutting: `exception/GlobalExceptionHandler` turns exceptions into HTTP errors;
+`aop/ServiceTimingAspect` logs how long each service call takes.
 
-| # | Milestone | Main files |
+## Endpoints
+
+| Method | Path | What it does |
 |---|---|---|
-| 1 | Queue Number Simulator: Scanner, loop, modulo, running totals | `QueueNumberSimulator` |
-| 2 | Ticket base class: constructors, `this(...)`, getters, setters, `ageInHours()`, static `nextId` and `totalCreated()` | `model/Ticket`, `Priority`, `Status` |
-| 3 | Subclasses and a capability: abstract `estimateEffortHours()`, `Escalatable` with a default `escalationBadge()`, `printTriageBoard` | `model/BugTicket`, `FeatureRequestTicket`, `AccessRequestTicket`, `Escalatable`, `Severity`, `service/TriageBoard` |
-| 4 | Repository and triage queue: `Comparable`, `TicketComparators`, generic `Repository<T>` (`all()`, `findById`, `groupByAssignee`), two `PriorityQueue`s, generic `oldest()` | `repository/Repository`, `service/TriageService`, `service/TicketComparators` |
-| 5 | Loading and reporting: custom checked/unchecked exceptions, pipe-delimited loader, end-of-day report | `service/TicketFileLoader`, `service/ReportGenerator`, `exception/*` |
-| 6 | TicketAnalytics: Streams (`groupingBy`, `mapToDouble`, `reduce`, `flatMap`) and `Optional` (`findByIdSafe`) | `service/TicketAnalytics`, `repository/Repository` |
-| 7 | tickets.json: Jackson with subtypes, one-time migration from the text file | `service/TicketJsonStore`, `service/TicketMigration` |
+| POST | `/api/tickets` | Create a ticket → 201 |
+| GET | `/api/tickets?status=&assignee=&page=&size=&sort=` | List tickets, one page at a time |
+| GET | `/api/tickets/{id}` | One ticket → 200 or 404 |
+| PATCH | `/api/tickets/{id}` | Change status, priority, description, assignee, tags (needs `version`) |
+| POST | `/api/tickets/{id}/escalate?version=` | Escalate a bug or access ticket |
+| GET | `/api/tickets/by-assignee` | Tickets grouped by assignee |
+| POST | `/api/tickets/import` | Upload a text file of tickets (multipart field `file`) |
+| GET | `/api/triage?order=PRIORITY\|ASSIGNEE` | OPEN tickets in the order they would be served |
+| POST | `/api/triage/serve-next?order=&assignee=` | Take the next ticket → 200, or 204 if none |
+| GET | `/api/triage/board` | Triage board as plain text |
+| GET | `/api/reports/eod` | End-of-day report as plain text |
+| POST | `/api/reports/eod/files` | Save the report to `data/reports/` |
+| GET | `/api/analytics` | Streams analytics + database counts |
+| GET | `/api/simulator?start=&count=` | Month 1's queue number simulator |
 
-## Project structure
+Try them all at **http://localhost:8080/swagger-ui.html** while the app runs.
 
-```text
-QueueDesk/
-├── pom.xml                      Maven build file (Java 17, Jackson for JSON)
-├── data/tickets.txt             old text format: migrated into tickets.json on the first run
-└── src/main/java/com/queuedesk/
-    ├── Main.java                the menu: asks questions, calls the other classes
-    ├── QueueNumberSimulator.java Milestone 1 (also runs on its own)
-    ├── model/                   what a ticket IS
-    ├── repository/              where tickets are kept in memory
-    ├── service/                 what we DO with tickets (triage, analytics, files, JSON, report)
-    ├── exception/               our own exception types
-    └── util/                    InputHelper: safe keyboard input
-```
+## Validation and errors
+
+1. **Field checks** (`@NotBlank`, `@Size`, ... on the request records, `@Valid` in the controller).
+2. **Business rules** in `TicketValidator`: type-specific fields, no fields from another type,
+   no duplicate ticket, a CLOSED ticket can't change, an escalated ticket's priority can't be lowered,
+   only BUG and ACCESS tickets can be escalated.
+3. **Database constraints**: NOT NULL columns and a unique key on (ticket type, title, requester).
+
+Errors use Spring's Problem Details JSON: `400` invalid request, `404` not found, `409` conflict.
+
+## Concurrency
+
+- **IDs:** MySQL `AUTO_INCREMENT`, never duplicated.
+- **Lost updates:** `@Version` (optimistic locking). Updates must send the `version` they read;
+  a change based on an old version gets `409 Conflict` instead of overwriting someone else's change.
+- **Serve next:** a single `UPDATE ... WHERE id = ? AND status = 'OPEN'`, so two requests can never
+  take the same ticket.
+- **Duplicates at the same moment:** the unique key; the second insert gets `409`.
+- **Imports:** one transaction, all or nothing. **Reports:** read in one read-only transaction.
+- Proven by `ConcurrencyIntegrationTest`, which runs requests on several threads at once.
 
 ## Requirements
 
-- JDK 17 (`java -version` and `javac -version` should both say 17)
-- Maven 3.9+, or the Maven bundled with IntelliJ IDEA. The first build downloads Jackson, so it needs internet once.
+- JDK 17
+- Maven 3.9+ (or the one bundled with IntelliJ IDEA). The first build downloads the libraries.
+- MySQL 8 running on `localhost:3306`
 
-## How to run
+## Set up the database connection
 
-**IntelliJ IDEA:** open the project folder, wait for Maven to load, open
-`src/main/java/com/queuedesk/Main.java`, and click the green ▶ next to `main`.
-Type your answers in the Run window at the bottom.
+The app reads three environment variables (see `src/main/resources/application.yml`):
 
-**Terminal**, from the project folder:
+| Variable | Default | Meaning |
+|---|---|---|
+| `QUEUEDESK_DB_URL` | `jdbc:mysql://localhost:3306/queuedesk?createDatabaseIfNotExist=true` | Where MySQL is |
+| `QUEUEDESK_DB_USERNAME` | `root` | MySQL user |
+| `QUEUEDESK_DB_PASSWORD` | *(empty)* | MySQL password: **never commit it** |
+
+The `queuedesk` database and its tables are created automatically on the first start.
+
+**IntelliJ:** Run → Edit Configurations → QueueDeskApplication → Environment variables:
+`QUEUEDESK_DB_USERNAME=root;QUEUEDESK_DB_PASSWORD=yourPassword`
+
+**PowerShell (current window only):**
 
 ```powershell
-mvn compile exec:java
+$env:QUEUEDESK_DB_USERNAME = 'root'
+$env:QUEUEDESK_DB_PASSWORD = 'yourPassword'
 ```
 
-Run only the Milestone 1 simulator:
+## Run
 
 ```powershell
-mvn compile exec:java "-Dexec.mainClass=com.queuedesk.QueueNumberSimulator"
+mvn spring-boot:run
 ```
 
-## Where tickets are stored
+Or in IntelliJ, run `QueueDeskApplication`. On the first start, the sample tickets in
+`data/tickets.txt` are imported into the empty database.
 
-```text
-first run:   data/tickets.txt  --(read once)-->  data/tickets.json
-every run:   data/tickets.json  <-- loaded at start, saved after every change -->  QueueDesk
+## Test
+
+```powershell
+mvn test
 ```
 
-- `data/tickets.json` is created on the first run and is not committed to Git.
-- To start again with the sample tickets, close QueueDesk and delete `data/tickets.json`.
-- To start with no tickets, close QueueDesk and put `[]` in `data/tickets.json`.
-- If `data/tickets.json` is broken, QueueDesk stops without changing it and says what is wrong.
-- Edit `data/tickets.json` only while QueueDesk is closed; it is overwritten after every change.
+The integration tests need MySQL too. They use a separate database, `queuedesk_test`, which is
+created and emptied automatically; your real tickets are never touched.
 
-## Text file format (first run and option 6)
+| Test | What it checks |
+|---|---|
+| `TicketValidatorTest` | Each business rule, with Mockito instead of a database |
+| `TicketApiIntegrationTest` | The HTTP API: status codes, validation errors, paging, optimistic locking |
+| `ReportApiIntegrationTest` | The overdue report, using a Clock set two days ahead |
+| `ConcurrencyIntegrationTest` | Many threads at once: no ticket served twice, no lost update |
+
+## Text file format (import)
 
 One ticket per line, exactly 7 fields separated by `|`. Lines starting with `#` are ignored.
 
@@ -98,21 +133,18 @@ feature|title|description|requester|PRIORITY|votes|business justification
 access|title|description|requester|PRIORITY|system name|access level
 ```
 
-If any line is wrong, nothing is imported, and the message says which line to fix.
-Option 6 skips tickets that are already in QueueDesk (same type, title and requester),
-so importing the same file twice does not create duplicates.
+If any line is wrong, nothing is imported and the error names the line. Tickets that already
+exist (same type, title and requester) are skipped.
 
 ## Rules used
 
 - Effort estimate: bug 2 / 4 / 8 hours (MINOR / MAJOR / BLOCKER), feature 8 hours, access 1 hour.
-- Triage order: higher priority first, then the older ticket first.
-- Options 4 and 5 can also use a second queue: by assignee (A-Z, unassigned last), then highest priority.
+- Triage order: higher priority first, then the older ticket first. A second queue orders by assignee.
 - Escalating a bug or access ticket raises its escalation level and its priority by one step.
 - Overdue: CRITICAL, still OPEN or IN_PROGRESS, created more than 24 hours ago.
 - Simulator: ticket numbers divisible by 5 go to the VIP lane; numbers divisible by 10 also get a priority recheck.
-- Ticket IDs continue after the highest saved ID, so they are never reused.
 
 ## Not included yet
 
-- JUnit 5 / Mockito tests.
-- QueueDesk is a single-user, single-threaded console program; it is not made for several users at once.
+- Database migration scripts (Flyway); tables are created by Hibernate (`ddl-auto: update`).
+- Authentication.

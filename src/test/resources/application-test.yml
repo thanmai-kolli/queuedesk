@@ -1,0 +1,13 @@
+# Used only by the tests (@ActiveProfiles("test")). Overrides application.yml.
+spring:
+  datasource:
+    # A separate database, so tests never touch your real tickets.
+    url: ${QUEUEDESK_TEST_DB_URL:jdbc:mysql://localhost:3306/queuedesk_test?createDatabaseIfNotExist=true}
+  jpa:
+    hibernate:
+      # Fresh, empty tables for every test run; dropped at the end.
+      ddl-auto: create-drop
+    show-sql: false
+
+queuedesk:
+  seed-file: ""

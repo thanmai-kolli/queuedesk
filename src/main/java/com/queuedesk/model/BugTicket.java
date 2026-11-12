@@ -1,18 +1,36 @@
 package com.queuedesk.model;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.DiscriminatorValue;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * Milestone 3: a ticket for something that is broken.
  * It IS a Ticket (extends) and it CAN be escalated (implements Escalatable).
+ * Stored in the "tickets" table with ticket_type = 'BUG'.
  */
+@Entity
+@DiscriminatorValue("BUG")
 public class BugTicket extends Ticket implements Escalatable {
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
     private Severity severity;
+
+    @Column(name = "steps_to_reproduce", length = 2000)
     private String stepsToReproduce;
+
+    // The same column is used by AccessRequestTicket; feature-request rows leave it empty.
+    @Column(name = "escalation_level")
     private int escalationLevel = 0;
 
-    // Only for Jackson when loading tickets.json (see the note in Ticket).
-    private BugTicket() {
-        super();
+    // For JPA only (see Ticket).
+    protected BugTicket() {
     }
 
     public BugTicket(String title, String description, String requester, Priority priority,
@@ -51,6 +69,11 @@ public class BugTicket extends Ticket implements Escalatable {
     }
 
     @Override
+    public TicketType getTicketType() {
+        return TicketType.BUG;
+    }
+
+    @Override
     public String getType() {
         return "Bug";
     }
@@ -72,24 +95,12 @@ public class BugTicket extends Ticket implements Escalatable {
     }
 
     @Override
-    public void validate() {
-        super.validate();
-        if (severity == null) {
-            throw new IllegalArgumentException("severity is missing");
-        }
-        if (isBlank(stepsToReproduce)) {
-            throw new IllegalArgumentException("stepsToReproduce is missing");
-        }
-        if (escalationLevel < 0) {
-            throw new IllegalArgumentException("escalationLevel cannot be negative");
-        }
-    }
-
-    @Override
-    public String getDetails() {
-        return super.getDetails()
-                + formatLine("Severity", severity)
-                + formatLine("Steps to reproduce", stepsToReproduce)
-                + formatLine("Escalation", escalationBadge());
+    public Map<String, Object> typeDetails() {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("severity", severity);
+        details.put("stepsToReproduce", stepsToReproduce);
+        details.put("escalationLevel", escalationLevel);
+        details.put("escalation", escalationBadge());
+        return details;
     }
 }

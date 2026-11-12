@@ -8,12 +8,16 @@
 # VS Code settings
 /.vscode/
 
-# Reports written by option 7
-/data/eod-report.txt
+# Reports saved by POST /api/reports/eod/files
+/data/reports/
 
-# Saved tickets (created on the first run from data/tickets.txt) and its temporary file
+# Files from the console version (before the REST + MySQL version)
+/data/eod-report.txt
 /data/tickets.json
 /data/tickets.json.tmp
+
+# Never commit passwords: if you keep local settings in a file, use this name
+/src/main/resources/application-local.yml
 
 # My own practice/test files
 /data/practice/
